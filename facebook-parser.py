@@ -1,24 +1,64 @@
+#!/usr/bin/env python
 import re, os
+from HTMLParser import HTMLParser
 from pprint import pprint
 
-opener = open('friends.html', 'r')
-reading = opener.read()
-opener.close()
-pyfile = os.path.dirname(os.path.abspath(__file__))
+with open('friends.htm', 'r') as f: #closes automatically, handles any exceptions
+    reading = f.read()
 
+pyfile = os.path.dirname(os.path.abspath(__file__)) #wherever you go, there you are
 
-def friend_parser():
-    """Takes raw HTML, cleans via regex and splits all the names."""
+class FriendParser(HTMLParser):
 
-    cleantext = re.sub(r'\[[^)]*\]', '', reading) #cleans dates
-    cleantext2 = re.sub(r'\([^)]*\)', '', cleantext) #cleans emails
-    splitter = cleantext2.split("</li><li>")
-    newlist = [x.strip(' ') for x in splitter]
+    stack = []
+    current_head = ""
+    data = ""
+    header = ['html', 'body', 'div', 'h2']
+    expected = ['html', 'body', 'div', 'ul', 'li']
+    friends = []
 
-    pprint(newlist)
+    def handle_starttag(self, tag, attrs):
+        self.stack.append(tag)
+        if self.stack == self.expected:
+            self.data = ""
 
-    return newlist
+    def handle_endtag(self, tag):
+        if self.stack == self.expected:
+            self.friends.append(Friend(self.data, self.current_head))
+        self.stack.pop()
 
+    def handle_data(self, data):
+        if self.stack == self.expected:
+            self.data += data
+        if self.stack == self.header:
+            self.current_head = data
+
+    def handle_entityref(self, name):
+        if self.stack == self.expected:
+            self.data += name
+
+    def handle_charref(self, name):
+        if self.stack == self.expected:
+            self.data += unichr(name) #hexadecimal bug - strip/map?
+
+    #how do I map regex to str and get the groups back? name and date. match regex to str to get matches back
+
+class Friend():
+
+    name = ""
+    status = ""
+    date = ""
+
+    def __init__(self, name, status):
+        self.name, self.date = self._parse_name(name)
+        self.status = status
+
+    def _parse_name(self, name):
+        #([^\(]+)\(([^)]+)\)
+        return (name, "")
+
+    def __str__(self):
+        return "Friend(%s, %s)" % (self.name, self.status) #add status later
 
 def message_name():
     """Finds names within message files."""
@@ -26,7 +66,7 @@ def message_name():
 
     for subdir, dirs, files in os.walk(pyfile + '/messages'):
         for filename in files:
-            message_open = open(filename + '.html', 'r')
+            message_open = open(filename, 'r')
             message_read = message_open.read()
             message_open.close()
             #how do I read from <title> brackets in every file?
@@ -39,6 +79,8 @@ def message_name():
 def id_association():
     """Associates names to IDs via dictionary."""
 
-
-friend_parser()
+parser = FriendParser()
+parser.feed(reading)
+for friend in parser.friends:
+    print friend
 message_name()
